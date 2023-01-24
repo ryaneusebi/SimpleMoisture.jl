@@ -1,3 +1,5 @@
+# Module that defines tooling for tracer advection extending
+# FourierFlows.jl and GeophysicalFlows.jl
 module TracerAdvection
 
 export
@@ -78,7 +80,6 @@ end
     struct Vars2D{Aphys, Atrans} <: AbstractVars
 
 The variables of a 2D `TracerAdvectionDiffussion` problem.
-
 """
 struct Vars2D{Aphys,Atrans} <: AbstractVars
     "tracer concentration"

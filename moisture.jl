@@ -6,7 +6,7 @@ include("passive_tracer.jl")
 using GeophysicalFlows, CUDA, Random, Printf, CairoMakie
 
 ### Device
-dev = GPU()
+dev = CPU()
 
 ### RNG
 if dev == CPU()
@@ -33,7 +33,7 @@ forcing_bandwidth = 1.5 * 2π / L  # the width of the forcing spectrum, `δ_f`
 e = 1.0                           # evaporation rate           
 τc = 0.5                          # condensation time scale
 small_scale_amp = 1.0             # amplitude of small-scale forcing
-small_scale_wn = 4               # wavenumber of small-scale forcing
+small_scale_wn = 4                # wavenumber of small-scale forcing
 
 ### Grid
 grid = TwoDGrid(dev; nx=n, Lx=L)
@@ -67,7 +67,7 @@ end
 function warp_sine(grid)
   k = small_scale_wn
   xx, yy = ones(n) * grid.x', grid.y * ones(n)'
-  γx = @. γ₀ * (small_scale_amp * cos(2π * k * xx / L) * sin(2π * k * yy / L) + 0)#cos(2π * xx / L) * sin(2π * yy / L) / 4)
+  γx = @. γ₀ * (small_scale_amp * cos(2π * k * xx / L) * sin(2π * k * yy / L) + 0)
   γy = @. γ₀ * (small_scale_amp * sin(2π * k * xx / L) * cos(2π * k * yy / L) + cos(2π * yy / L) / 4)
   return device_array(dev)(γx), device_array(dev)(γy)
 end
