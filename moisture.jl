@@ -3,7 +3,7 @@
 # the form of linear drag and hyperviscosity.
 include("passive_tracer.jl")
 
-using GeophysicalFlows, CUDA, Random, Printf, CairoMakie
+using GeophysicalFlows, CUDA, Random, Printf, CairoMakie, NetCDF
 
 ### Device
 dev = GPU()
@@ -20,7 +20,7 @@ random_uniform = dev == CPU() ? rand : CUDA.rand
 n = 512                           # number of grid points
 L = 2π                            # domain size       
 stepper = "ETDRK4"                # timestepper
-ν, nν = 1e-16, 4                  # hyperviscosity coefficient and hyperviscosity order, 512: 1e-16; 256: 1e-14; 128: 1e-14: 64: 1e-8; 32: 1e-6
+ν, nν = 5e-16, 4                  # hyperviscosity coefficient and hyperviscosity order, 512: 1e-16; 256: 1e-14; 128: 1e-14: 64: 1e-8; 32: 1e-6
 νc, nνc = ν, nν                   # hyperviscosity coefficient and hyperviscosity order for tracer
 μ, nμ = 1e-2, 0                   # linear drag coefficient
 dt = 1e-3                         # timestep
@@ -72,7 +72,15 @@ function warp_sine(grid)
   return device_array(dev)(γx), device_array(dev)(γy)
 end
 
-γx, γy = warp_none(grid)
+function warp_mysine(grid)
+  k = small_scale_wn
+  xx, yy = ones(n) * grid.x', grid.y * ones(n)'
+  γx = device_array(dev)(zeros(grid.nx, grid.ny))
+  γy = @. γ₀ * sin(2π * yy / L)
+  return device_array(dev)(γx), device_array(dev)(γy)
+end
+
+γx, γy = warp_mysine(grid)
 
 ### Problem setup
 NSprob = TwoDNavierStokes.Problem(dev; nx=n, Lx=L, ν, nν, μ, nμ, dt, stepper=stepper, calcF=calcF!, stochastic=true)
@@ -93,6 +101,12 @@ TracerAdvection.set_c!(ADprob, c₀)
 E = Diagnostic(TwoDNavierStokes.energy, params.base_prob; nsteps) # energy
 Z = Diagnostic(TwoDNavierStokes.enstrophy, params.base_prob; nsteps) # enstrophy
 diags = [E, Z] # a list of Diagnostics passed to `stepforward!` will  be updated every timestep.
+
+# Create empty array to store our data
+t_len = nsteps÷nsubs+1
+datac⁻ = Array{Float64}(undef,t_len,n,n)
+dataζ = Array{Float64}(undef,t_len,n,n)
+
 
 # Makie
 c⁻ = Observable(Array(vars.c))
@@ -139,9 +153,37 @@ CairoMakie.record(fig, "twodturb_forced.mp4", frames, framerate=25) do j
   enstrophy[] = push!(enstrophy[], Point2f(μ * Z.t[E.i], Z.data[Z.i] / forcing_wavenumber^2))
   title_ζ[] = "vorticity, μ t=" * @sprintf("%.2f", μ * clock.t)
 
+  # Store data to be saved
+  print(j)
+  datac⁻[j+1,:,:] .= c⁻[]
+  dataζ[j+1,:,:] .= ζ[]
+
   # Step!
   stepforward!(ADprob, nsubs)
   TracerAdvection.updatevars!(ADprob)
   stepforward!(params.base_prob, diags, nsubs)
   TwoDNavierStokes.updatevars!(params.base_prob)
 end
+
+
+
+# Create and save netcdf file with data
+t = collect(1:t_len)
+var_attrs = Dict("longname" => "saturation deficit")
+en_attrs = Dict("longname" => "enstrophy")
+
+time_attrs = Dict("longname" => "time",
+           "units" => "simulation steps")
+x_attrs = Dict("longname" => "x")
+y_attrs = Dict("longname" => "y")
+
+fn = "twodturb_forced_singrad.nc"
+
+isfile(fn) && rm(fn)
+nccreate(fn,"c_minus","t",t,time_attrs,"x",x,x_attrs,"y",y,y_attrs,atts=var_attrs)
+ncwrite(datac⁻, fn, "c_minus")
+
+nccreate(fn,"enstrophy","t",t,time_attrs,"x",x,x_attrs,"y",y,y_attrs,atts=en_attrs)
+ncwrite(dataζ, fn, "enstrophy")
+
+ncclose(fn)
