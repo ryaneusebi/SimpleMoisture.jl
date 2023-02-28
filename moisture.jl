@@ -7,7 +7,7 @@ using GeophysicalFlows, CUDA, Random, Printf, CairoMakie, NetCDF
 
 ### Device
 dev = GPU()
-
+#hi
 ### RNG
 if dev == CPU()
   Random.seed!(1234)
