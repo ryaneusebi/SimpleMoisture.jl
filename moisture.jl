@@ -20,7 +20,7 @@ random_uniform = dev == CPU() ? rand : CUDA.rand
 n = 512                           # number of grid points
 L = 2π                            # domain size       
 stepper = "ETDRK4"                # timestepper
-ν, nν = 5e-16, 4                  # hyperviscosity coefficient and hyperviscosity order, 512: 1e-16; 256: 1e-14; 128: 1e-14: 64: 1e-8; 32: 1e-6
+ν, nν = 1e-16, 4                  # hyperviscosity coefficient and hyperviscosity order, 512: 1e-16; 256: 1e-14; 128: 1e-14: 64: 1e-8; 32: 1e-6
 νc, nνc = ν, nν                   # hyperviscosity coefficient and hyperviscosity order for tracer
 μ, nμ = 1e-2, 0                   # linear drag coefficient
 dt = 1e-3                         # timestep
@@ -76,7 +76,7 @@ function warp_mysine(grid)
   k = small_scale_wn
   xx, yy = ones(n) * grid.x', grid.y * ones(n)'
   γx = device_array(dev)(zeros(grid.nx, grid.ny))
-  γy = @. γ₀ * sin(2π * yy / L)
+  γy = @. γ₀ * sin(2π * yy / L) / 4
   return device_array(dev)(γx), device_array(dev)(γy)
 end
 
@@ -177,7 +177,7 @@ time_attrs = Dict("longname" => "time",
 x_attrs = Dict("longname" => "x")
 y_attrs = Dict("longname" => "y")
 
-fn = "twodturb_forced_singrad.nc"
+fn = "twodturb_forced_singrad_1-16_smallamp.nc"
 
 isfile(fn) && rm(fn)
 nccreate(fn,"c_minus","t",t,time_attrs,"x",x,x_attrs,"y",y,y_attrs,atts=var_attrs)
